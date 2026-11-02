@@ -263,12 +263,41 @@ Para manter a cópia servida sempre sincronizada com a dependência fixada em
 cada `npm run dev` e `npm run build`. Esse arquivo é **gerado** (está no
 `.gitignore`) e **não deve ser editado à mão**.
 
-> **Conexão de rede em tempo de execução:** ao iniciar a câmera, o WebGazer
-> carrega os modelos de detecção facial (MediaPipe FaceMesh / TensorFlow.js).
-> Dependendo do ambiente, esses modelos podem ser baixados da rede na primeira
-> execução. Portanto, para o teste da câmera, mantenha o computador **conectado
-> à internet**. Nenhum dado da sessão ou vídeo é enviado para fora do navegador;
-> o tráfego de rede se restringe ao carregamento dos modelos da própria biblioteca.
+### 9.2 Modelos do MediaPipe FaceMesh (servidos localmente)
+
+O rastreador facial do WebGazer 3.5.3 é o **MediaPipe FaceMesh**. Ao iniciar a
+câmera, o WebGazer chama `faceLandmarksDetection.createDetector` com
+`runtime: 'mediapipe'` e um `solutionPath` que, por padrão, é o caminho
+**relativo** `'./mediapipe/face_mesh'` (ver
+`node_modules/webgazer/src/params.mjs`). A partir desse caminho, o runtime do
+MediaPipe carrega um `face_mesh.js` e, em seguida, ~16 MB de arquivos de solução
+(WASM + dados do modelo). Se esses arquivos **não** forem servidos no caminho
+esperado, as requisições retornam **404** e o próprio wrapper minificado do
+MediaPipe lança o erro `t is not a function` de dentro de `webgazer.begin()`
+(era esta a causa real do erro "Não foi possível iniciar a câmera").
+
+Esses arquivos acompanham o pacote em
+`node_modules/webgazer/dist/mediapipe/face_mesh/`. Para que fiquem acessíveis no
+caminho que o WebGazer solicita, o mesmo plugin `sync-webgazer-vendor` copia a
+pasta `dist/mediapipe/` **verbatim** (byte a byte; os arquivos binários `.wasm`,
+`.data` e `.binarypb` **não** são transformados) para
+`public/vendor/mediapipe/`, a cada `npm run dev` e `npm run build`. Eles passam a
+ser servidos em `/vendor/mediapipe/face_mesh/…` no dev, no preview e na versão de
+produção. Assim como a cópia do `webgazer.js`, esses assets são **gerados**
+(estão no `.gitignore`, em `public/vendor/`) e **não** são versionados — são
+sempre regenerados a partir do `node_modules`.
+
+Em `src/services/gazeTracker.js` (único módulo autorizado a tocar no
+`window.webgazer`), definimos
+`webgazer.params.faceMeshSolutionPath = '/vendor/mediapipe/face_mesh'`
+**antes** de `webgazer.begin()`. O caminho é **absoluto** (com barra inicial)
+para resolver corretamente independentemente da rota atual.
+
+> **Carregamento dos modelos é local:** como os arquivos do MediaPipe FaceMesh
+> são servidos pela **própria aplicação** (a partir da sua origem, em
+> `/vendor/mediapipe/…`), **não** há download de nenhum CDN ou servidor de
+> terceiros ao iniciar a câmera. Nenhum dado da sessão ou vídeo é enviado para
+> fora do navegador.
 
 ---
 

@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import { fileURLToPath } from 'node:url';
-import { copyFileSync, mkdirSync } from 'node:fs';
+import { copyFileSync, mkdirSync, cpSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 // WebGazer is deliberately NOT bundled or transformed by Vite/esbuild.
@@ -28,6 +28,33 @@ import { dirname } from 'node:path';
 // public/vendor/webgazer.js on every dev-server start and production build.
 // Files in public/ are copied verbatim into dist/ and served at the same path
 // in dev, preview, and the production build.
+//
+// WebGazer's MediaPipe FaceMesh solution assets (the SECOND fix below).
+//
+// WebGazer 3.5.3's face tracker is MediaPipe FaceMesh. At runtime,
+// node_modules/webgazer/src/facemesh.mjs calls
+// faceLandmarksDetection.createDetector(model, { runtime: 'mediapipe',
+// solutionPath: params.faceMeshSolutionPath }). In params.mjs,
+// `faceMeshSolutionPath` defaults to the RELATIVE path './mediapipe/face_mesh'.
+// The MediaPipe runtime then injects a <script> to load `face_mesh.js` from
+// that path and that loader fetches ~16 MB of solution assets (WASM + model
+// data) from the same base via `locateFile`.
+//
+// Those assets ship inside the package at
+// node_modules/webgazer/dist/mediapipe/face_mesh/ but our app served NONE of
+// them, so './mediapipe/face_mesh/...' resolved to 404s. When MediaPipe's
+// loader fails to fetch/instantiate its solution files, its own minified
+// wrapper throws `t is not a function` from inside webgazer.begin(). That is a
+// MISSING-ASSET problem, not a bundler problem (which is why the earlier
+// bundler fixes only shifted the minified symbol z2 -> t5 -> t).
+//
+// Fix: copy the whole dist/mediapipe/ folder VERBATIM into
+// public/vendor/mediapipe/ so the assets are served (byte-for-byte, binary
+// files untouched) at /vendor/mediapipe/face_mesh/ in dev, preview, and the
+// production build. src/services/gazeTracker.js points
+// webgazer.params.faceMeshSolutionPath at the absolute served path
+// '/vendor/mediapipe/face_mesh' before begin() runs, so the MediaPipe runtime
+// loads the assets locally from our own origin (no third-party CDN fetch).
 
 const webgazerSource = fileURLToPath(
   new URL('./node_modules/webgazer/dist/webgazer.js', import.meta.url)
@@ -35,11 +62,22 @@ const webgazerSource = fileURLToPath(
 const webgazerPublicDest = fileURLToPath(
   new URL('./public/vendor/webgazer.js', import.meta.url)
 );
+const mediapipeSource = fileURLToPath(
+  new URL('./node_modules/webgazer/dist/mediapipe', import.meta.url)
+);
+const mediapipePublicDest = fileURLToPath(
+  new URL('./public/vendor/mediapipe', import.meta.url)
+);
 
 /**
- * Copy WebGazer's prebuilt UMD global bundle into public/vendor so it is served
- * untransformed and stays in sync with the pinned webgazer@3.5.3 dependency.
- * Runs at config resolution so it is ready for dev, build, and preview.
+ * Copy WebGazer's prebuilt UMD global bundle AND its MediaPipe FaceMesh
+ * solution assets into public/vendor so they are served untransformed and stay
+ * in sync with the pinned webgazer@3.5.3 dependency. Runs at config resolution
+ * so everything is ready for dev, build, and preview.
+ *
+ * The MediaPipe assets include binary files (.wasm, .data, .binarypb); they are
+ * copied byte-for-byte with cpSync (never transformed) so their bytes are
+ * served losslessly.
  */
 function syncWebgazerVendor() {
   return {
@@ -47,6 +85,8 @@ function syncWebgazerVendor() {
     configResolved() {
       mkdirSync(dirname(webgazerPublicDest), { recursive: true });
       copyFileSync(webgazerSource, webgazerPublicDest);
+      // Recursively copy the MediaPipe FaceMesh solution folder verbatim.
+      cpSync(mediapipeSource, mediapipePublicDest, { recursive: true });
     },
   };
 }

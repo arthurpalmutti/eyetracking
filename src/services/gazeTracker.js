@@ -200,6 +200,26 @@ export function createGazeTracker() {
 
       const webgazer = getWebgazer();
 
+      // Point WebGazer's MediaPipe FaceMesh at the locally served solution
+      // assets BEFORE begin() runs.
+      //
+      // WebGazer 3.5.3's face tracker is MediaPipe FaceMesh. Its init() calls
+      // faceLandmarksDetection.createDetector(model, { runtime: 'mediapipe',
+      // solutionPath: webgazer.params.faceMeshSolutionPath }). That path
+      // defaults to the RELATIVE './mediapipe/face_mesh' (see
+      // node_modules/webgazer/src/params.mjs), which our app does not serve, so
+      // the MediaPipe loader 404s and its own minified wrapper throws
+      // `t is not a function` from inside begin(). We serve WebGazer's bundled
+      // MediaPipe assets locally (the sync-webgazer-vendor Vite plugin copies
+      // node_modules/webgazer/dist/mediapipe/ into public/vendor/mediapipe/) and
+      // point the solution path at that ABSOLUTE served URL so it resolves
+      // regardless of the current route and loads entirely from our own origin
+      // (no third-party CDN fetch). This is the only place window.webgazer is
+      // configured, preserving the single-access-point invariant.
+      if (webgazer.params && typeof webgazer.params === 'object') {
+        webgazer.params.faceMeshSolutionPath = '/vendor/mediapipe/face_mesh';
+      }
+
       // Privacy / configuration defaults.
       webgazer.saveDataAcrossSessions(false);
       webgazer.applyKalmanFilter(true);
