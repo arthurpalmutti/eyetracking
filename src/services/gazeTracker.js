@@ -30,7 +30,17 @@
 // License note: WebGazer.js is distributed under GPL-3.0-or-later. See
 // THIRD_PARTY_NOTICES.md.
 
-import webgazer from 'webgazer';
+// The bare `webgazer` specifier is aliased in vite.config.js to WebGazer's own
+// prebuilt, webpack-minified UMD bundle (dist/webgazer.commonjs2.js) instead of
+// its raw ESM `module` entry. That avoids esbuild re-minifying WebGazer's
+// TensorFlow.js graph, which otherwise mangled internals and threw
+// `z2 is not a function` from begin() in the production build. The commonjs2
+// bundle exports `{ webgazer }`, so unwrap that single property; fall back to
+// the module itself if a future build exposes the object directly.
+import webgazerModule from 'webgazer';
+
+const webgazer =
+  webgazerModule && webgazerModule.webgazer ? webgazerModule.webgazer : webgazerModule;
 
 /**
  * @typedef {Object} GazeTracker
