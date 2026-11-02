@@ -242,6 +242,34 @@ estão em [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 > disponibilizar o código-fonte correspondente sob a mesma licença). Recomenda-se
 > avaliar essas obrigações **antes de qualquer distribuição** do protótipo.
 
+### 9.1 Como o WebGazer é carregado (nota técnica)
+
+O WebGazer.js **não** é empacotado nem transformado pelo Vite/esbuild. Em vez
+disso, o pacote prébuild oficial do WebGazer (`node_modules/webgazer/dist/webgazer.js`,
+a variante com objeto **global**) é servido **sem qualquer modificação** como um
+arquivo estático e carregado por uma tag `<script src="/vendor/webgazer.js">`
+(script clássico, **não** módulo) no `index.html`, antes do script da aplicação.
+Isso define um `window.webgazer` global, que é consumido **somente** por
+`src/services/gazeTracker.js`.
+
+Esse é o método de carregamento **oficialmente suportado** pelo WebGazer e evita
+que o minificador do bundler altere os componentes internos (TensorFlow.js) da
+biblioteca — a causa dos erros de tempo de execução `z2 is not a function` e
+`t5 is not a function` observados anteriormente apenas na versão de produção.
+
+Para manter a cópia servida sempre sincronizada com a dependência fixada em
+`webgazer@3.5.3`, um pequeno plugin do Vite (`sync-webgazer-vendor`, em
+`vite.config.js`) copia `dist/webgazer.js` para `public/vendor/webgazer.js` a
+cada `npm run dev` e `npm run build`. Esse arquivo é **gerado** (está no
+`.gitignore`) e **não deve ser editado à mão**.
+
+> **Conexão de rede em tempo de execução:** ao iniciar a câmera, o WebGazer
+> carrega os modelos de detecção facial (MediaPipe FaceMesh / TensorFlow.js).
+> Dependendo do ambiente, esses modelos podem ser baixados da rede na primeira
+> execução. Portanto, para o teste da câmera, mantenha o computador **conectado
+> à internet**. Nenhum dado da sessão ou vídeo é enviado para fora do navegador;
+> o tráfego de rede se restringe ao carregamento dos modelos da própria biblioteca.
+
 ---
 
 ## 10. Documentação complementar

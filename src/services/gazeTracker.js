@@ -30,17 +30,39 @@
 // License note: WebGazer.js is distributed under GPL-3.0-or-later. See
 // THIRD_PARTY_NOTICES.md.
 
-// The bare `webgazer` specifier is aliased in vite.config.js to WebGazer's own
-// prebuilt, webpack-minified UMD bundle (dist/webgazer.commonjs2.js) instead of
-// its raw ESM `module` entry. That avoids esbuild re-minifying WebGazer's
-// TensorFlow.js graph, which otherwise mangled internals and threw
-// `z2 is not a function` from begin() in the production build. The commonjs2
-// bundle exports `{ webgazer }`, so unwrap that single property; fall back to
-// the module itself if a future build exposes the object directly.
-import webgazerModule from 'webgazer';
+// WebGazer is NOT imported/bundled here. It is loaded as its prebuilt UMD
+// global bundle via a plain <script src="/vendor/webgazer.js"> tag in
+// index.html (served verbatim from public/vendor, kept in sync with
+// webgazer@3.5.3 by the sync-webgazer-vendor Vite plugin). That script defines
+// a global `window.webgazer`.
+//
+// Rationale: letting Vite/esbuild bundle or re-transform WebGazer mangled its
+// minified TensorFlow.js internals and threw `z2 is not a function` and then
+// `t5 is not a function` from inside webgazer.begin() in the PRODUCTION build
+// only. Loading the untransformed global is WebGazer's officially supported
+// method and is immune to that bundler mangling.
+//
+// This module is the ONLY place that reads window.webgazer, preserving the
+// single-access-point invariant (no other module may touch webgazer).
 
-const webgazer =
-  webgazerModule && webgazerModule.webgazer ? webgazerModule.webgazer : webgazerModule;
+/**
+ * Resolve the global WebGazer object loaded by index.html's <script> tag.
+ * Throws a clear pt-BR error if the global is missing (e.g. the vendor script
+ * failed to load), so a load failure is diagnosable instead of surfacing as an
+ * obscure "undefined is not a function".
+ *
+ * @returns {any} the global WebGazer object
+ */
+function getWebgazer() {
+  const wg = typeof window !== 'undefined' ? window.webgazer : undefined;
+  if (!wg || typeof wg.begin !== 'function') {
+    throw new Error(
+      'Biblioteca WebGazer não foi carregada. Verifique se o script /vendor/webgazer.js ' +
+        'foi carregado na página antes de iniciar a câmera e recarregue a aplicação.'
+    );
+  }
+  return wg;
+}
 
 /**
  * @typedef {Object} GazeTracker
@@ -71,8 +93,11 @@ export function checkCompatibility() {
 
   let webgazerCompatible = true;
   try {
-    if (typeof webgazer.detectCompatibility === 'function') {
-      webgazerCompatible = webgazer.detectCompatibility() !== false;
+    const wg = typeof window !== 'undefined' ? window.webgazer : undefined;
+    if (!wg || typeof wg.begin !== 'function') {
+      webgazerCompatible = false;
+    } else if (typeof wg.detectCompatibility === 'function') {
+      webgazerCompatible = wg.detectCompatibility() !== false;
     }
   } catch {
     webgazerCompatible = false;
@@ -92,7 +117,8 @@ export function checkCompatibility() {
       compatible: false,
       hasMediaDevices: true,
       reason:
-        'O WebGazer indicou que este navegador não é compatível com o rastreamento ocular.',
+        'O WebGazer não está disponível ou indicou que este navegador não é compatível ' +
+        'com o rastreamento ocular. Verifique se o script /vendor/webgazer.js foi carregado.',
     };
   }
 
@@ -172,6 +198,8 @@ export function createGazeTracker() {
       // released immediately so WebGazer owns the single live camera stream.
       await ensureCameraPermission();
 
+      const webgazer = getWebgazer();
+
       // Privacy / configuration defaults.
       webgazer.saveDataAcrossSessions(false);
       webgazer.applyKalmanFilter(true);
@@ -188,17 +216,17 @@ export function createGazeTracker() {
 
     /** Toggle the small webcam preview. */
     showVideo(visible) {
-      webgazer.showVideo(!!visible);
+      getWebgazer().showVideo(!!visible);
     },
 
     /** Toggle the face mesh overlay (useful during calibration). */
     showFaceOverlay(visible) {
-      webgazer.showFaceOverlay(!!visible);
+      getWebgazer().showFaceOverlay(!!visible);
     },
 
     /** Toggle the face feedback box (useful during calibration). */
     showFaceFeedbackBox(visible) {
-      webgazer.showFaceFeedbackBox(!!visible);
+      getWebgazer().showFaceFeedbackBox(!!visible);
     },
 
     /**
@@ -206,17 +234,17 @@ export function createGazeTracker() {
      * @param {boolean} enabled
      */
     setDebugPoints(enabled) {
-      webgazer.showPredictionPoints(!!enabled);
+      getWebgazer().showPredictionPoints(!!enabled);
     },
 
     /** Pause tracking (keeps the model/camera; use for tab-hidden/manual pause). */
     pause() {
-      webgazer.pause();
+      getWebgazer().pause();
     },
 
     /** Resume tracking after a pause. */
     resume() {
-      webgazer.resume();
+      getWebgazer().resume();
     },
 
     /**
@@ -225,7 +253,7 @@ export function createGazeTracker() {
      * @returns {{x:number,y:number}|null}
      */
     getCurrentPrediction() {
-      const p = webgazer.getCurrentPrediction();
+      const p = getWebgazer().getCurrentPrediction();
       return p == null ? null : { x: p.x, y: p.y };
     },
 
@@ -236,15 +264,18 @@ export function createGazeTracker() {
      * @returns {Promise<void>}
      */
     async end() {
-      try {
-        webgazer.clearGazeListener();
-      } catch {
-        // ignore
-      }
-      try {
-        await webgazer.end();
-      } catch {
-        // ignore end() errors during teardown
+      const wg = typeof window !== 'undefined' ? window.webgazer : undefined;
+      if (wg) {
+        try {
+          wg.clearGazeListener();
+        } catch {
+          // ignore
+        }
+        try {
+          await wg.end();
+        } catch {
+          // ignore end() errors during teardown
+        }
       }
       stopOwnedStream();
       started = false;
