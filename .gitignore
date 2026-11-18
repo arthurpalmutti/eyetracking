@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Generated vendor copy of WebGazer's prebuilt UMD bundle. It is copied from
+# node_modules/webgazer/dist/webgazer.js by the sync-webgazer-vendor Vite plugin
+# on every dev-server start and production build, so it stays in sync with the
+# pinned webgazer@3.5.3 dependency and must not be hand-edited or committed.
+public/vendor/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+
+# Env
+.env
+.env.*

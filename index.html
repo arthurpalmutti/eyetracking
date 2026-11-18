@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Protótipo acadêmico de rastreamento ocular por webcam para análise de comportamento visual durante a leitura." />
+    <title>Olhar em Leitura</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <!--
+      WebGazer.js is loaded here as its prebuilt UMD/global bundle (served
+      verbatim from public/vendor/webgazer.js, kept in sync with the installed
+      webgazer@3.5.3 by the sync-webgazer-vendor Vite plugin). It is a plain
+      (non-module) script so it is NEVER processed by Vite/esbuild, which avoids
+      the bundler mangling its minified TensorFlow.js internals. It defines a
+      global `window.webgazer` that src/services/gazeTracker.js consumes. It
+      must load BEFORE the app module below so the global exists when the app
+      initializes the camera. WebGazer.js is GPL-3.0-or-later; see
+      THIRD_PARTY_NOTICES.md.
+    -->
+    <script src="/vendor/webgazer.js"></script>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

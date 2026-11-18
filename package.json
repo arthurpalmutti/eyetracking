@@ -1,0 +1,21 @@
+{
+  "name": "eye-reading-tracker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Protótipo acadêmico de rastreamento ocular por webcam para caracterização de padrões de comportamento visual durante a leitura.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "webgazer": "3.5.3"
+  },
+  "devDependencies": {
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  }
+}
